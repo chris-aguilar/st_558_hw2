@@ -1,0 +1,226 @@
+---
+title: "ST 558 HW 2: Programming in Base R"
+author: "Chris Aguilar"
+format: html
+editor: visual
+---
+
+## Task 1: Basic Vector Practice
+
+We first create some data to work with, then we assign subject names to each vector of data.
+
+```{r}
+
+# Make data
+pre_treatment <- c(130, 128, 116, 124, 133, 134, 118, 126, 114, 127, 141, 138, 128, 140, 137, 131, 120, 128, 139, 135)
+
+post_treatment <- c(114, 98, 113, 99, 107, 116, 113, 111, 119, 117, 101, 119, 130, 122, 106, 106, 124, 102, 117, 113)
+
+# create names vector
+subj_names <- paste("Subject", 1:20, sep = "_")
+
+# assign names to each set of subjects
+names(pre_treatment) <- subj_names
+names(post_treatment) <- subj_names
+
+```
+
+Next we take the difference between blood pressures `pre_treatment` and `post_treatment`, and find the average difference.
+
+```{r}
+
+treatment_diffs <- pre_treatment - post_treatment
+
+avg_diff <- mean(treatment_diffs)
+
+avg_diff
+```
+
+We now find the patients that experienced a decrease in blood pressure.
+
+```{r}
+
+# Find indices
+bp_decrease_idx <- which(treatment_diffs > 0)
+
+pos_change_diffs <- treatment_diffs[bp_decrease_idx]
+
+pos_change_diffs
+```
+
+Now, we find the average positive change.
+
+```{r}
+
+mean(pos_change_diffs)
+```
+
+## Task 2: Basic Data Frame Practice
+
+Creating a data frame to reflect the data above.
+
+```{r}
+
+blood_pressures <- data.frame(
+  patient = subj_names,
+  pre_bp = pre_treatment,
+  post_bp = post_treatment,
+  diff_bp = pre_treatment - post_treatment)
+
+```
+
+We'll now look at a subset of the data where `diff_bp` is negative.
+
+```{r}
+
+subset(blood_pressures, diff_bp < 0)
+```
+
+We now add a logical column to see which post_treatment blood pressures are less than 120, then we print the dataframe with `knittr::kable()`
+
+```{r}
+
+blood_pressures$post_bp_lt_120 <- blood_pressures$post_bp < 120
+
+knitr::kable(blood_pressures)
+```
+
+## Task 3: List Practice
+
+We now look at data where the treatment is a placebo. We then create a dataframe similar to the treatment data above, using placebo data.
+
+```{r}
+
+pre_placebo <- c(138, 135, 147, 117, 152, 134, 114, 121, 131, 130)
+
+post_placebo <- c(105, 136, 123, 130, 134, 143, 135, 139, 120, 124)
+
+placebo_bp <- data.frame(
+  patient = subj_names,
+  pre_bp = pre_placebo,
+  post_bp = post_placebo,
+  diff_bp = pre_placebo - post_placebo,
+  post_bp_lt_120 = post_placebo > 120
+)
+```
+
+We now place these two dataframes in a list and practice accessing list elements.
+
+```{r}
+
+treatments_list <- list(treatment = blood_pressures, placebo = placebo_bp)
+
+# accessing first element, the treatment df in 3 diff ways
+treatments_list[["treatment"]]
+treatments_list[[1]]
+treatments_list$treatment
+```
+
+Using one line of code, we access the `placebo_bp`'s `pre_bp` column.
+
+```{r}
+
+treatments_list$placebo$pre_bp
+```
+
+## Task 4: Control Flow Practice
+
+We categorize post_treatment (or placebo) blood pressures and append this categorization to the data frames with a for-loop.
+
+```{r}
+
+# Adding status column
+treatments_list$treatment$status <- character(20)
+treatments_list$placebo$status <- character(20)
+
+# Post treatment BPs and categories
+for(i in 1:nrow(treatments_list$treatment)) {
+  treatments_list$treatment$status[[i]] <- ifelse(
+    treatments_list$treatment$post_bp[[i]] <= 120, "Optimal", 
+      ifelse(
+        treatments_list$treatment$post_bp[[i]] > 120 &
+        treatments_list$treatment$post_bp[[i]] <= 130, "Borderline", "High"
+        )
+    )
+}
+
+treatments_list$treatment
+
+# Placebo BPs and categories
+for(i in 1:nrow(treatments_list$placebo)) {
+  treatments_list$placebo$status[[i]] <- ifelse(
+    treatments_list$placebo$post_bp[[i]] <= 120, "Optimal", 
+      ifelse(
+        treatments_list$placebo$post_bp[[i]] > 120 &
+        treatments_list$placebo$post_bp[[i]] <= 130, "Borderline", "High"
+        )
+    )
+}
+
+treatments_list$placebo
+```
+
+## Task 5: Function Writing
+
+We expect to receive similar data in the future and it can be time-consuming to manually code up solutions for each set of data. We'll be interested in different statistics for the `pre`, `post`, and `diff` columns from both data frames, so we should write a function to extract these quickly.
+
+Our function will expect a list of dataframes with the columns `pre_bp`, `post_bp`, and `diff_bp` in each data frame. It will also take a `stat` argument, set to `"mean"` by default.
+
+```{r}
+
+stat_maker <- function(x, stat = "mean") {
+  
+  my_fun <- get(stat)
+  
+  # variables of interest
+  vars <- c("pre_bp", "post_bp", "diff_bp")
+  
+  # creating output containers, one per dataframe containing one slot per variable
+  treatment_stats <- vector("numeric", 3)
+  placebo_stats <- vector("numeric", 3)
+  
+  # looping through the treatment data frame for the stat of interest
+  for(i in seq_along(vars)) {
+    treatment_stats[[i]] <- my_fun(x$treatment[[vars[i]]])
+  }
+  
+  # looping through the placebo data frame for the stat of interest
+  for(i in seq_along(vars)) {
+    placebo_stats[[i]] <- my_fun(x$placebo[[vars[i]]])
+  }
+  
+  # generating stat names for treatment, placebo variables of interest
+  treatment_names <- paste("treatment", vars, stat, sep = "_")
+  placebo_names <- paste("placebo", vars, stat, sep = "_")
+  
+  # combining treatment and placebo stats in order
+  all_stats <- c(treatment_stats, placebo_stats)
+  
+  # assigning element names
+  names(all_stats) <- c(treatment_names, placebo_names)
+  
+  all_stats
+}
+```
+
+Now we use our function to compute the mean, variance, standard deviation, minimum, and maximum of each variable of interest.
+
+```{r}
+
+# mean, left as default
+stat_maker(treatments_list)
+
+# variance
+stat_maker(treatments_list, "var")
+
+# standard deviation
+stat_maker(treatments_list, "sd")
+
+# min
+stat_maker(treatments_list, "min")
+
+# max
+stat_maker(treatments_list, "max")
+```
+
+The end. Thank you for reading! 📖
